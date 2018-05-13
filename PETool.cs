@@ -9,12 +9,12 @@ namespace PETools
 {
     public partial class PETool
     {
-        private IMAGE_DOS_HEADER dosHeader;
-        private byte[] dosStub;
-        private IMAGE_NT_HEADERS ntSignature;
-        private IMAGE_FILE_HEADER fileHeader;
-        private IMAGE_OPTIONAL_HEADER32 optionalHeader;
-        private IMAGE_DATA_DIRECTORIES dataDirectories;
+        public IMAGE_DOS_HEADER dosHeader;
+        public byte[] dosStub;
+        public IMAGE_NT_HEADERS ntSignature;
+        public IMAGE_FILE_HEADER fileHeader;
+        public IMAGE_OPTIONAL_HEADER32 optionalHeader;
+        public IMAGE_DATA_DIRECTORIES dataDirectories;
 
         List<PESection> sections;
 
@@ -27,8 +27,7 @@ namespace PETools
         {
             get
             {
-                UInt16 IMAGE_FILE_32BIT_MACHINE = 0x0100;
-                return (IMAGE_FILE_32BIT_MACHINE & fileHeader.Characteristics) == IMAGE_FILE_32BIT_MACHINE;
+                return (PECharacteristics.IMAGE_FILE_32BIT_MACHINE & fileHeader.Characteristics) == PECharacteristics.IMAGE_FILE_32BIT_MACHINE;
             }
         }
 
@@ -201,10 +200,13 @@ namespace PETools
 
         }
 
-        private void Serialize(uint totalSize)
+        public void UpdateHeader()
         {
-            /* Allocate enough space to contain the whole new file */
-            byte[] file = new byte[totalSize];
+            SerializeHeader(ref rawData);
+        }
+
+        private uint SerializeHeader(ref byte[] file)
+        {
             uint filePosition = 0;
 
             Array.Copy(PEUtility.RawSerialize(dosHeader), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_DOS_HEADER)));
@@ -221,6 +223,15 @@ namespace PETools
 
             Array.Copy(PEUtility.RawSerialize(optionalHeader), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER32)));
             filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER32));
+
+            return filePosition;
+        }
+
+            private void Serialize(uint totalSize)
+        {
+            /* Allocate enough space to contain the whole new file */
+            byte[] file = new byte[totalSize];
+            uint filePosition = SerializeHeader(ref file);
 
             Array.Copy(PEUtility.RawSerialize(dataDirectories), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_DATA_DIRECTORIES)));
             filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_DATA_DIRECTORIES));

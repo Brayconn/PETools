@@ -114,6 +114,26 @@ namespace PETools
         public UInt32 NumberOfRvaAndSizes;
     }
 
+    [Flags]
+    public enum PECharacteristics : UInt16
+    {
+        IMAGE_FILE_RELOCS_STRIPPED = 0x0001,
+        IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002,
+        IMAGE_FILE_LINE_NUMS_STRIPPED = 0x0004,
+        IMAGE_FILE_LOCAL_SYMS_STRIPPED = 0x0008,
+        IMAGE_FILE_AGGRESIVE_WS_TRIM = 0x0010,
+        IMAGE_FILE_LARGE_ADDRESS_AWARE = 0x0020,
+        IMAGE_FILE_BYTES_REVERSED_LO = 0x0080,
+        IMAGE_FILE_32BIT_MACHINE = 0x0100,
+        IMAGE_FILE_DEBUG_STRIPPED = 0x0200,
+        IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP = 0x0400,
+        IMAGE_FILE_NET_RUN_FROM_SWAP = 0x0800,
+        IMAGE_FILE_SYSTEM = 0x1000,
+        IMAGE_FILE_DLL = 0x2000,
+        IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000,
+        IMAGE_FILE_BYTES_REVERSED_HI = 0x8000,
+    };
+
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct IMAGE_FILE_HEADER
     {
@@ -123,7 +143,7 @@ namespace PETools
         public UInt32 PointerToSymbolTable;
         public UInt32 NumberOfSymbols;
         public UInt16 SizeOfOptionalHeader;
-        public UInt16 Characteristics;
+        public PECharacteristics Characteristics;
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
