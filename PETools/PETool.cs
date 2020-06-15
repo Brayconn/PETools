@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Linq;
 
 namespace PETools
 {
@@ -13,9 +12,10 @@ namespace PETools
         public byte[] dosStub;
         public IMAGE_NT_HEADERS ntSignature;
         public IMAGE_FILE_HEADER fileHeader;
-        public IMAGE_OPTIONAL_HEADER32 optionalHeader;
+        public IMAGE_OPTIONAL_HEADER_STANDARD optionalStandard;
+        public IMAGE_OPTIONAL_HEADER_32 optionalHeader32;
+        public IMAGE_OPTIONAL_HEADER_32PLUS optionalHeader32plus;
         public IMAGE_DATA_DIRECTORIES dataDirectories;
-
         public List<PESection> sections;
 
         /// <summary>
@@ -23,7 +23,13 @@ namespace PETools
         /// </summary>
         public byte[] rawData;
 
-        public bool Is32BitHeader => (PECharacteristics.IMAGE_FILE_32BIT_MACHINE & fileHeader.Characteristics) == PECharacteristics.IMAGE_FILE_32BIT_MACHINE;
+        public bool Is32BitHeader => (fileHeader.Characteristics & PECharacteristics.IMAGE_FILE_32BIT_MACHINE) != 0;
+
+        public PETool() { }
+        public PETool(string path)
+        {
+            Read(path);
+        }
 
         /// <summary>
         /// Read a PE file.
@@ -32,10 +38,9 @@ namespace PETools
         public void Read(string filePath)
         {
             // Read in the DLL or EXE and get the timestamp
-            using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 Parse(stream);
-                stream.Close();
             }
         }
 
@@ -45,10 +50,9 @@ namespace PETools
         /// <param name="data">Contents of a PE as a byte array.</param>
         public void Read(byte[] data)
         {
-            using (MemoryStream stream = new MemoryStream(data))
+            using (var stream = new MemoryStream(data))
             {
                 Parse(stream);
-                stream.Close();
             }
         }
 
@@ -62,26 +66,41 @@ namespace PETools
             stream.Read(rawData, 0, (int)stream.Length);
             stream.Seek(0, SeekOrigin.Begin);
 
-            BinaryReader reader = new BinaryReader(stream);
-            dosHeader = PEUtility.FromBinaryReader<IMAGE_DOS_HEADER>(reader);
-
-            int stubSize = (int)dosHeader.e_lfanew - Marshal.SizeOf(typeof(IMAGE_DOS_HEADER));
-            dosStub = reader.ReadBytes(stubSize);
-
-            // Add 4 bytes to the offset
-            stream.Seek(dosHeader.e_lfanew, SeekOrigin.Begin);
-            ntSignature = PEUtility.FromBinaryReader<IMAGE_NT_HEADERS>(reader);
-            fileHeader = PEUtility.FromBinaryReader<IMAGE_FILE_HEADER>(reader);
-            optionalHeader = PEUtility.FromBinaryReader<IMAGE_OPTIONAL_HEADER32>(reader);
-            dataDirectories = PEUtility.FromBinaryReader<IMAGE_DATA_DIRECTORIES>(reader);
-
-            sections = new List<PESection>();
-            for (int i = 0; i < fileHeader.NumberOfSections; i++)
+            using (var reader = new BinaryReader(stream))
             {
-                IMAGE_SECTION_HEADER header = PEUtility.FromBinaryReader<IMAGE_SECTION_HEADER>(reader);
-                PESection section = new PESection(header);
-                section.Parse(ref rawData);
-                sections.Add(section);
+                dosHeader = PEUtility.FromBinaryReader<IMAGE_DOS_HEADER>(reader);
+
+                int stubSize = (int)dosHeader.e_lfanew - Marshal.SizeOf(typeof(IMAGE_DOS_HEADER));
+                dosStub = reader.ReadBytes(stubSize);
+
+                // Add 4 bytes to the offset
+                stream.Seek(dosHeader.e_lfanew, SeekOrigin.Begin);
+                ntSignature = PEUtility.FromBinaryReader<IMAGE_NT_HEADERS>(reader);
+                if (!ntSignature.IsValid)
+                    throw new FileLoadException();
+                fileHeader = PEUtility.FromBinaryReader<IMAGE_FILE_HEADER>(reader);
+                optionalStandard = PEUtility.FromBinaryReader<IMAGE_OPTIONAL_HEADER_STANDARD>(reader);
+                switch (optionalStandard.Magic)
+                {
+                    case 0x10B:
+                        optionalHeader32 = PEUtility.FromBinaryReader<IMAGE_OPTIONAL_HEADER_32>(reader);
+                        break;
+                    case 0x107:
+                        throw new NotSupportedException("Can't load ROM images I guess");
+                    case 0x20B:
+                        optionalHeader32plus = PEUtility.FromBinaryReader<IMAGE_OPTIONAL_HEADER_32PLUS>(reader);
+                        break;
+                }
+                dataDirectories = PEUtility.FromBinaryReader<IMAGE_DATA_DIRECTORIES>(reader);
+
+                sections = new List<PESection>(fileHeader.NumberOfSections);
+                for (int i = 0; i < fileHeader.NumberOfSections; i++)
+                {
+                    IMAGE_SECTION_HEADER header = PEUtility.FromBinaryReader<IMAGE_SECTION_HEADER>(reader);
+                    PESection section = new PESection(header);
+                    section.Parse(ref rawData);
+                    sections.Add(section);
+                }
             }
         }
 
@@ -91,12 +110,12 @@ namespace PETools
         /// <returns>Returns bool describing if layout succeeded.</returns>
         public bool Layout()
         {
-            uint virtualAlignment = optionalHeader.SectionAlignment;
-            uint fileAlignment = optionalHeader.FileAlignment;
+            uint virtualAlignment = optionalHeader32.SectionAlignment;
+            uint fileAlignment = optionalHeader32.FileAlignment;
             uint totalSize = 0;
             uint initializedDataSize = 0;
 
-            totalSize += optionalHeader.SizeOfHeaders;
+            totalSize += optionalHeader32.SizeOfHeaders;
             /* Calculate total physical size required */
             foreach (PESection s in sections)
             {
@@ -104,22 +123,21 @@ namespace PETools
             }
 
             /* Layout the sections in physical order */
-            uint filePosition = optionalHeader.SizeOfHeaders;
+            uint filePosition = optionalHeader32.SizeOfHeaders;
             sections.Sort(new SectionPhysicalComparer());
             foreach (PESection s in sections)
             {
-                if (s.ContributesToFileSize())
+                if (s.ContributesToFileSize)
                 {
                     s.RawSize = PEUtility.AlignUp((uint)s.Data.Length, fileAlignment);
                     s.PhysicalAddress = filePosition;
 
                     filePosition += s.RawSize;
-                    initializedDataSize += PEUtility.AlignUp((uint)s.Data.Length, fileAlignment);
+                    initializedDataSize += s.RawSize;
                 }
-                break;
             }
 
-            optionalHeader.SizeOfInitializedData = initializedDataSize;
+            optionalStandard.SizeOfInitializedData = initializedDataSize;
 
             /*
              * Fix up virtual addresses of the sections.
@@ -136,22 +154,22 @@ namespace PETools
                 switch(s.Name)
                 {
                     case ".text":
-                        optionalHeader.BaseOfCode = virtAddr;
+                        optionalStandard.BaseOfCode = virtAddr;
                         break;
                     case ".rdata":
-                        dataDirectories.debug.VirtualAddress = virtAddr;
+                        dataDirectories.Debug.VirtualAddress = virtAddr;
                         goto case ".data";
                     case ".data":
                         if(!dataSectionEncountered)
                         {
                             dataSectionEncountered = true;
-                            optionalHeader.BaseOfData = virtAddr;
+                            if(optionalStandard.Magic == IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32)
+                                optionalHeader32.BaseOfData = virtAddr;
                         }
                         break;
                     case ".reloc":
-                        dataDirectories.baseReloc.VirtualAddress = virtAddr;
+                        dataDirectories.BaseRelocationTable.VirtualAddress = virtAddr;
                         break;
-
                 }
 
                 s.VirtualAddress = virtAddr;
@@ -169,12 +187,10 @@ namespace PETools
                         s.VirtualSize = (uint)s.Data.Length;
                     virtAddr += PEUtility.AlignUp(s.VirtualSize, virtualAlignment);
                 }
-
-                break;
             }
 
             /* Total virtual size is the final virtual address, which includes the initial virtual offset. */
-            optionalHeader.SizeOfImage = virtAddr;
+            optionalHeader32.SizeOfImage = virtAddr;
 
             /* Serialize and write the header contents */
             Serialize(totalSize);
@@ -203,8 +219,22 @@ namespace PETools
             Array.Copy(PEUtility.RawSerialize(fileHeader), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_FILE_HEADER)));
             filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_FILE_HEADER));
 
-            Array.Copy(PEUtility.RawSerialize(optionalHeader), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER32)));
-            filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER32));
+            Array.Copy(PEUtility.RawSerialize(optionalStandard), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_FILE_HEADER)));
+            filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_FILE_HEADER));
+
+            switch(optionalStandard.Magic)
+            {
+                case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32:
+                    Array.Copy(PEUtility.RawSerialize(optionalHeader32), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER_32)));
+                    filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER_32));
+                    break;
+                case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_ROM:
+                    throw new NotSupportedException("No ROMS");
+                case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32PLUS:
+                    Array.Copy(PEUtility.RawSerialize(optionalHeader32plus), 0, file, filePosition, Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER_32PLUS)));
+                    filePosition += (uint)Marshal.SizeOf(typeof(IMAGE_OPTIONAL_HEADER_32PLUS));
+                    break;
+            }
 
             return filePosition;
         }
@@ -226,13 +256,12 @@ namespace PETools
             }
 
             /* Copy the section data */
-            filePosition = optionalHeader.SizeOfHeaders;
+            filePosition = optionalHeader32.SizeOfHeaders;
             sections.Sort(new SectionPhysicalComparer());
             foreach (PESection s in sections)
             {
                 Array.Copy(s.Data, 0, file, filePosition, s.Data.Length);
                 filePosition += s.RawSize;
-                break;
             }
 
             /* Overwrite the container data */
@@ -246,7 +275,7 @@ namespace PETools
         public void WriteFile(string filename)
         {
             /* Flush the contents of rawData back to disk */
-            using (var fs = new FileStream(filename, FileMode.OpenOrCreate))
+            using (var fs = new FileStream(filename, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite))
             {
                 fs.Write(rawData, 0, rawData.Length);
             }
@@ -262,16 +291,41 @@ namespace PETools
         /// </summary>
         /// <param name="name">Name of section</param>
         /// <param name="data">Byte array of section data</param>
-        /// <returns></returns>
+        /// <returns>Bytes written</returns>
         public uint WriteSectionData(string name, byte[] data)
         {
             PESection section = sections.Find(s => s.Name == name);
             if (section == null)
                 return 0;
 
-            section.Data = new byte[data.Length];
-            Array.Copy(data, 0, section.Data, 0, data.Length);
+            section.Data = data;
             return (uint)data.Length;
+        }
+
+        public void AddSection(PESection section)
+        {
+            section.PhysicalAddress = sections[sections.Count - 1].PhysicalAddress * 2;
+            sections.Add(section);
+            fileHeader.NumberOfSections++;
+        }
+
+        public void InsertSection(int index, PESection section)
+        {
+            var pre = sections[index - 1];
+            var post = sections[index];
+            var virt = (post.PhysicalAddress - pre.PhysicalAddress) / 2;
+            section.VirtualAddress = virt;
+            sections.Insert(index, section);
+            fileHeader.NumberOfSections++;
+        }
+
+        public void RemoveSection(string name)
+        {
+            if (TryGetSection(name, out PESection s))
+            {
+                sections.Remove(s);
+                fileHeader.NumberOfSections--;
+            }
         }
 
         /// <summary>
@@ -281,7 +335,22 @@ namespace PETools
         /// <returns>Byte array of section contents</returns>
         public byte[] GetSectionData(string name)
         {
-            return sections.Find(s => s.Name == name)?.Data;
+            return GetSection(name)?.Data;
+        }
+
+        public bool TryGetSection(string name, out PESection section)
+        {
+            return (section = GetSection(name)) != null;
+        }
+
+        public PESection GetSection(string name)
+        {
+            return sections.Find(x => x.Name == name);
+        }
+
+        public bool ContainsSection(string name)
+        {
+            return sections.Any(x => x.Name == name);
         }
     }
 }

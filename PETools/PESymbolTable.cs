@@ -13,7 +13,7 @@ namespace PETools
         public uint value;
         public IMAGE_SECTION_NUMBER sectionNumber;
         public IMAGE_SYMBOL_TYPE type;
-        public byte storageClass;
+        public IMAGE_SYMBOL_CLASS storageClass;
         public byte numberOfAuxSymbols;
 
         public PEImageSymbol(IMAGE_SYMBOL symbol, int index)
@@ -28,18 +28,15 @@ namespace PETools
             // TODO: NULL and UNDEFINED symbols are ignored
 
             // if name[0..3] are all zero, name[4..7] contain offset into symbol table
-            if (symbol.ShortName[0] == 0 &&
-                symbol.ShortName[1] == 0 &&
-                symbol.ShortName[2] == 0 &&
-                symbol.ShortName[3] == 0)
+            if (symbol.Zeros == 0)
             {
-                this.Offset = BitConverter.ToUInt16(symbol.ShortName, 4);
+                this.Offset = Offset;
                 this.Name = null;
             }
             else
             {
                 ASCIIEncoding encoding = new ASCIIEncoding();
-                this.Name = encoding.GetString(symbol.ShortName);
+                this.Name = encoding.GetString(symbol.Name);
             }
         }
 

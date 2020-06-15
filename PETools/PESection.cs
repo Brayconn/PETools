@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
+using System.Linq;
 
 namespace PETools
 {
@@ -33,7 +34,7 @@ namespace PETools
                 ASCIIEncoding encoding = new ASCIIEncoding();
                 byte[] bytes = new byte[8];
                 int len = 0;
-                foreach (char c in Header.SectionName)
+                foreach (char c in Header.Name)
                 {
                     if (c == '\0')
                         break;
@@ -45,19 +46,19 @@ namespace PETools
             set
             {
                 char[] chars = value.ToCharArray();
-                Array.Clear(Header.SectionName, 0, 8);
-                Array.Copy(chars, Header.SectionName, chars.Length);
+                Array.Clear(Header.Name, 0, 8);
+                Array.Copy(chars, Header.Name, chars.Length);
 
             }
         }
 
         public bool HasRelocations => Header.NumberOfRelocations != 0;
 
-        public bool HasUninitializedData => (Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_UNINITIALIZED_DATA) != 0;
+        public bool HasUninitializedData => (Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_UNINITIALIZED_DATA) != 0;
 
-        public bool HasInitializedData => (Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0;
+        public bool HasInitializedData => (Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0;
 
-        public bool HasCode => (Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0;
+        public bool HasCode => (Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0;
 
         public uint VirtualAddress
         {
@@ -67,8 +68,8 @@ namespace PETools
 
         public uint VirtualSize
         {
-            get => Header.PhysicalAddressOrVirtualSizeUnion;
-            set => Header.PhysicalAddressOrVirtualSizeUnion = value;
+            get => Header.VirtualSize;
+            set => Header.VirtualSize = value;
         }
 
         public uint PhysicalAddress
@@ -83,21 +84,23 @@ namespace PETools
             set => Header.SizeOfRawData = value;
         }
 
-        public bool ContributesToFileSize() =>
-                ((Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0) ||
+        public bool ContributesToFileSize =>
+                ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0) ||
                 (
-                 ((Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0) &&
-                 ((Header.Characteristics & (uint)IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_UNINITIALIZED_DATA) == 0)
+                 ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0) &&
+                 ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_UNINITIALIZED_DATA) == 0)
                 );
 
         public void Parse(ref byte[] file)
         {
             // Differentiate between COFF object and PE image.
             uint sectionSize = Header.SizeOfRawData;
+            /*TODO if virtualsize is > sizeofrawdata, need to 0 pad something???
             if (Header.PhysicalAddressOrVirtualSizeUnion > 0)
              sectionSize = Math.Min(
                  Header.SizeOfRawData,
                  Header.PhysicalAddressOrVirtualSizeUnion);
+            */
 
             Data = new byte[sectionSize];
             // Make a copy of the section data
@@ -169,7 +172,7 @@ namespace PETools
             foreach (IMAGE_RELOCATION reloc in relocations)
             {
                 ret += string.Format("\tIndex: {0:X}\tVirt Addr: {1:X} Type: {2}\n",
-                    reloc.SymbolTableIndex, reloc.VirtualAddress, reloc.Type);
+                    reloc.SymbolTableIndex, reloc.VirtualAddress, reloc.I386_Type);
             }
 
             return ret;

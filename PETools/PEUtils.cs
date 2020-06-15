@@ -14,12 +14,12 @@ namespace PETools
             return (x + (mask - 1)) & ~(mask - 1);
         }
 
-        public static byte[] RawSerialize(object anything)
+        public static byte[] RawSerialize(object obj)
         {
-            int rawsize = Marshal.SizeOf(anything);
-            byte[] rawdata = new byte[rawsize];
+            byte[] rawdata = new byte[Marshal.SizeOf(obj)];
+
             GCHandle handle = GCHandle.Alloc(rawdata, GCHandleType.Pinned);
-            Marshal.StructureToPtr(anything, handle.AddrOfPinnedObject(), false);
+            Marshal.StructureToPtr(obj, handle.AddrOfPinnedObject(), false);
             handle.Free();
 
             return rawdata;

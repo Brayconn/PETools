@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -28,7 +27,6 @@ namespace PETools
             {
                 SourceFile = Path.GetFileName(filePath);
                 Parse(stream);
-                stream.Close();
             }
         }
 
@@ -37,7 +35,6 @@ namespace PETools
             using (MemoryStream stream = new MemoryStream(data))
             {
                 Parse(stream);
-                stream.Close();
             }
         }
 
@@ -78,7 +75,7 @@ namespace PETools
 
             for (ushort i = (ushort)Marshal.SizeOf(typeof(uint)); i < stringTableSize; )
             {
-                String stringEntry = PEUtility.StringFromBinaryReader(reader);
+                string stringEntry = PEUtility.StringFromBinaryReader(reader);
                 SymbolTable.AddString(stringEntry, i);
                 i += (ushort)(stringEntry.Length + 1); // include NULL terminator
             }
