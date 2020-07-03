@@ -12,7 +12,7 @@ namespace PETools
         public uint PointerToSymbolTable;
         public uint NumberOfSymbols;
         public ushort SizeOfOptionalHeader;
-        public PECharacteristics Characteristics;
+        public IMAGE_FILE Characteristics;
     }
 
 #pragma warning disable CA1712 // Do not prefix enum values with type name
@@ -44,10 +44,9 @@ namespace PETools
         IMAGE_FILE_MACHINE_THUMB = 0x1c2, //Thumb
         IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169, //MIPS little-endian WCE v2 
     }
-#pragma warning restore CA1712 // Do not prefix enum values with type name
 
     [Flags]
-    public enum PECharacteristics : ushort
+    public enum IMAGE_FILE : ushort
     {
         IMAGE_FILE_RELOCS_STRIPPED = 0x0001,
         IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002,
@@ -65,5 +64,5 @@ namespace PETools
         IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000,
         IMAGE_FILE_BYTES_REVERSED_HI = 0x8000,
     };
-
+    #pragma warning restore CA1712 // Do not prefix enum values with type name
 }

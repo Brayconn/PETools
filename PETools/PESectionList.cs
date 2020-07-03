@@ -98,15 +98,14 @@ namespace PETools
         public override string ToString()
         {
             IDictionaryEnumerator group = sectionDict.GetEnumerator();
-            String str = String.Empty;
+            string str = string.Empty;
             while (group.MoveNext())
             {
-                str += String.Format("Section Group: {0}:\n", group.Key);
+                str += string.Format("Section Group: {0}:\n", group.Key);
                 ArrayList sections = (ArrayList)group.Value;
                 foreach (PESection section in sections)
                 {
-                    str += String.Format("\tSource: {0}\t\tSection: {1}\n",
-                        section.SourceCoff.SourceFile, section.Name);
+                    str += string.Format("\\tSection: {0}\n", section.Name);
                 }
             }
             return str;

@@ -14,7 +14,7 @@ namespace PETools
             return (x + (mask - 1)) & ~(mask - 1);
         }
 
-        public static byte[] RawSerialize(object obj)
+        public static byte[] RawSerialize<T>(this T obj)
         {
             byte[] rawdata = new byte[Marshal.SizeOf(obj)];
 
@@ -27,31 +27,46 @@ namespace PETools
 
         // Reads in a block from a file and converts it to the struct
         // type specified by the template parameter
-        public static T FromBinaryReader<T>(BinaryReader reader)
+        public static T ReadStruct<T>(this BinaryReader br)
         {
             // Read in a byte array
-            byte[] bytes = reader.ReadBytes(Marshal.SizeOf(typeof(T)));
+            byte[] bytes = br.ReadBytes(Marshal.SizeOf(typeof(T)));
 
             // Pin the managed memory while, copy it out the data, then unpin it
             GCHandle handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-            T theStructure = (T)Marshal.PtrToStructure(handle.AddrOfPinnedObject(), typeof(T));
+            T theStructure = Marshal.PtrToStructure<T>(handle.AddrOfPinnedObject());
             handle.Free();
 
             return theStructure;
         }
 
-        public static string StringFromBinaryReader(BinaryReader reader)
+        public static void WriteStruct<T>(this BinaryWriter bw, T obj)
+        {
+            bw.Write(obj.RawSerialize());
+        }
+
+        public static byte[] ReadBytes(this BinaryReader br, long count)
+        {
+            byte[] data = new byte[count];
+            using (var bw = new BinaryWriter(new MemoryStream(data, true)))
+            {
+                while (count > 0)
+                {
+                    bw.Write(br.ReadBytes(Math.Min((int)count, int.MaxValue)));
+                    count -= int.MaxValue;
+                }
+            }
+            return data;
+        }
+
+        public static string ReadCString(this BinaryReader reader)
         {
             List<byte> chars = new List<byte>();
             byte c;
             while ((c = reader.ReadByte()) != '\0')
                 chars.Add(c);
-
-            ASCIIEncoding encoding = new ASCIIEncoding();
-            string str = encoding.GetString(chars.ToArray());
-            return str;
+            return Encoding.ASCII.GetString(chars.ToArray());
         }
-
     }
 
     public class SectionVirtualComparer : IComparer<PESection>

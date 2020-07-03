@@ -5,20 +5,22 @@ using System.Runtime.InteropServices;
 namespace PETools
 {
     [DebuggerDisplay("Section Name = {new string(Name)}")]
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public struct IMAGE_SECTION_HEADER
     {
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
-        public char[] Name;
-        public uint VirtualSize;
-        public uint VirtualAddress;
-        public uint SizeOfRawData;
-        public uint PointerToRawData;
-        public uint PointerToRelocations;
-        public uint PointerToLinenumbers;
-        public ushort NumberOfRelocations;
-        public ushort NumberOfLinenumbers;
-        public IMAGE_SECTION_FLAGS Characteristics;
+        const int IMAGE_SIZEOF_SHORT_NAME = 8;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = IMAGE_SIZEOF_SHORT_NAME)]
+        [FieldOffset(0                           )] public char[] Name;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME     )] public uint PhysicalAddress;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME     )] public uint VirtualSize;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME +  4)] public uint VirtualAddress;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME +  8)] public uint SizeOfRawData;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 12)] public uint PointerToRawData;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 16)] public uint PointerToRelocations;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 20)] public uint PointerToLinenumbers;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 24)] public ushort NumberOfRelocations;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 26)] public ushort NumberOfLinenumbers;
+        [FieldOffset(IMAGE_SIZEOF_SHORT_NAME + 28)] public IMAGE_SECTION_FLAGS Characteristics;
     }
 
     [Flags]

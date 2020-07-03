@@ -3,17 +3,20 @@ using System.Collections.Generic;
 using System.Text;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Diagnostics;
 
 namespace PETools
 {
+    [DebuggerDisplay("Name = {new string(Header.Name)} Data Length = {Data.Length}, Relocation Count = {relocations?.Count ?? 0}")]
     public class PESection
     {
+        //TODO remove?
         public COFFTool SourceCoff { get; }
 
         public IMAGE_SECTION_HEADER Header;
-        public byte[] Data { get; set; }
-
-        List<IMAGE_RELOCATION> relocations;
+        public byte[] Data;
+        public List<IMAGE_RELOCATION> relocations;
 
         public PESection(IMAGE_SECTION_HEADER header)
         {
@@ -31,17 +34,15 @@ namespace PETools
         {
             get
             {
-                ASCIIEncoding encoding = new ASCIIEncoding();
                 byte[] bytes = new byte[8];
                 int len = 0;
                 foreach (char c in Header.Name)
                 {
                     if (c == '\0')
                         break;
-                    bytes[len] = (byte)c;
-                    len++;
+                    bytes[len++] = (byte)c;
                 }
-                return encoding.GetString(bytes, 0, len);
+                return Encoding.ASCII.GetString(bytes, 0, len);
             }
             set
             {
@@ -59,6 +60,8 @@ namespace PETools
         public bool HasInitializedData => (Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0;
 
         public bool HasCode => (Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0;
+
+        public bool ContributesToFileSize => HasInitializedData || (HasCode && !HasUninitializedData);
 
         public uint VirtualAddress
         {
@@ -83,50 +86,43 @@ namespace PETools
             get => Header.SizeOfRawData;
             set => Header.SizeOfRawData = value;
         }
-
-        public bool ContributesToFileSize =>
-                ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_INITIALIZED_DATA) != 0) ||
-                (
-                 ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_CODE) != 0) &&
-                 ((Header.Characteristics & IMAGE_SECTION_FLAGS.IMAGE_SCN_CNT_UNINITIALIZED_DATA) == 0)
-                );
-
-        public void Parse(ref byte[] file)
+                
+        public void Parse(Stream stream)
         {
-            // Differentiate between COFF object and PE image.
-            uint sectionSize = Header.SizeOfRawData;
-            /*TODO if virtualsize is > sizeofrawdata, need to 0 pad something???
-            if (Header.PhysicalAddressOrVirtualSizeUnion > 0)
-             sectionSize = Math.Min(
-                 Header.SizeOfRawData,
-                 Header.PhysicalAddressOrVirtualSizeUnion);
-            */
+            using (var br = new BinaryReader(stream, Encoding.ASCII, true))
+            {
+                //There was a bunch of code here that appears ot have been garbage
+                //the only thing of note here is that if the VirtualSize > SizeOfRawData then the memory will be padded with 0
+                //but that doesn't matter when reading a PESection from the file so??????????????????
 
-            Data = new byte[sectionSize];
-            // Make a copy of the section data
-            Array.Copy(file, Header.PointerToRawData,
-                Data, 0,
-                sectionSize);
-
-            ParseRelocations(ref file);
+                //Maybe there's something about switching between a COFF object and a PE section, but...
+                var originalPos = br.BaseStream.Position;
+                if (ContributesToFileSize)
+                {
+                    br.BaseStream.Seek(Header.PointerToRawData, SeekOrigin.Begin);
+                    Data = br.ReadBytes(Header.SizeOfRawData);
+                }
+                else
+                {
+                    Data = new byte[Header.SizeOfRawData];
+                }
+                if (HasRelocations)
+                    ParseRelocations(stream);
+                br.BaseStream.Position = originalPos;
+            }
         }
 
-        void ParseRelocations(ref byte[] file)
+        void ParseRelocations(Stream stream)
         {
-            relocations = new List<IMAGE_RELOCATION>();
-
-            if (!HasRelocations)
-                return;
-
-            MemoryStream stream = new MemoryStream(file);
-            stream.Seek(Header.PointerToRelocations, SeekOrigin.Begin);
-            BinaryReader reader = new BinaryReader(stream);
-
-            for (int i = 0; i < Header.NumberOfRelocations; i++)
+            using (var reader = new BinaryReader(stream, Encoding.ASCII, true))
             {
-                IMAGE_RELOCATION reloc;
-                reloc = PEUtility.FromBinaryReader<IMAGE_RELOCATION>(reader);
-                relocations.Add(reloc);
+                reader.BaseStream.Seek(Header.PointerToRelocations, SeekOrigin.Begin);
+
+                relocations = new List<IMAGE_RELOCATION>(Header.NumberOfRelocations);
+                for (int i = 0; i < Header.NumberOfRelocations; i++)
+                {
+                    relocations.Add(reader.ReadStruct<IMAGE_RELOCATION>());
+                }
             }
         }
 
