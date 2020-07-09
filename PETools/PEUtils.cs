@@ -32,6 +32,11 @@ namespace PETools
             // Read in a byte array
             byte[] bytes = br.ReadBytes(Marshal.SizeOf(typeof(T)));
 
+            return bytes.ToStruct<T>();
+        }
+
+        public static T ToStruct<T>(this byte[] bytes)
+        {
             // Pin the managed memory while, copy it out the data, then unpin it
             GCHandle handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
             T theStructure = Marshal.PtrToStructure<T>(handle.AddrOfPinnedObject());

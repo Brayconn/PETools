@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Diagnostics;
 
 namespace PETools
@@ -47,9 +45,8 @@ namespace PETools
             set
             {
                 char[] chars = value.ToCharArray();
-                Array.Clear(Header.Name, 0, 8);
-                Array.Copy(chars, Header.Name, chars.Length);
-
+                Array.Clear(Header.Name, 0, IMAGE_SECTION_HEADER.IMAGE_SIZEOF_SHORT_NAME);
+                Array.Copy(chars, Header.Name, Math.Min(chars.Length, IMAGE_SECTION_HEADER.IMAGE_SIZEOF_SHORT_NAME));
             }
         }
 
@@ -89,7 +86,7 @@ namespace PETools
                 
         public void Parse(Stream stream)
         {
-            using (var br = new BinaryReader(stream, Encoding.ASCII, true))
+            using (var br = new BinaryReader(stream, Encoding.Default, true))
             {
                 //There was a bunch of code here that appears ot have been garbage
                 //the only thing of note here is that if the VirtualSize > SizeOfRawData then the memory will be padded with 0
@@ -114,7 +111,7 @@ namespace PETools
 
         void ParseRelocations(Stream stream)
         {
-            using (var reader = new BinaryReader(stream, Encoding.ASCII, true))
+            using (var reader = new BinaryReader(stream, Encoding.Default, true))
             {
                 reader.BaseStream.Seek(Header.PointerToRelocations, SeekOrigin.Begin);
 

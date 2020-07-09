@@ -1,7 +1,9 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace PETools
 {
+    [DebuggerDisplay("Magic = {new string(e_magic)}, PE Header Address = {e_lfanew}")]
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct IMAGE_DOS_HEADER
     {

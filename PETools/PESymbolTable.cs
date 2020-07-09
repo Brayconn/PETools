@@ -35,8 +35,8 @@ namespace PETools
             }
             else
             {
-                ASCIIEncoding encoding = new ASCIIEncoding();
-                this.Name = encoding.GetString(symbol.Name);
+                //was using ASCII encoding
+                this.Name = new string(symbol.Name);
             }
         }
 

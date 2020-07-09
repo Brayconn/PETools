@@ -51,10 +51,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="COFFTool.cs" />
+    <Compile Include="ResourceSection.cs" />
     <Compile Include="Structs\DOSHeader.cs" />
     <Compile Include="Structs\OptionalHeaderDataDirectories.cs" />
     <Compile Include="Structs\COFFRelocations.cs" />
     <Compile Include="Structs\COFFFileHeader.cs" />
+    <Compile Include="Structs\Resources.cs" />
     <Compile Include="Structs\SectionHeader.cs" />
     <Compile Include="Structs\COFFSymbolTable.cs" />
     <Compile Include="Structs\OptionalHeader.cs" />

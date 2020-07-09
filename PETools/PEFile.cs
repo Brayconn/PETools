@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Linq;
 using System.Text;
 using System.Runtime.CompilerServices;
+using PETools.Structs;
 
 namespace PETools
 {
@@ -233,7 +234,11 @@ namespace PETools
             dataDirectories.Reserved.Size = 0;
         }
 
-        public void UpdateVirtualLayout()
+        const string TEXT = ".text";
+        const string RDATA = ".rdata";
+        const string DATA = ".data";
+        const uint StartingVirtualAddress = 0x1000;
+        public void UpdateVirtualLayout(uint initialVirtualAddress = StartingVirtualAddress)
         {
             uint virtualAlignment;
             switch (optionalStandard.Magic)
@@ -257,55 +262,82 @@ namespace PETools
              * As we encounter certain sections, we need to update
              * special fields (data directory entries etc.).
              */
-            uint virtAddr = 0x1000;
+            uint virtualPosition = initialVirtualAddress;
             bool dataSectionEncountered = false;
             foreach (var s in sections)
             {
                 //update optional header
                 switch(s.Name)
                 {
-                    case ".text":
-                        optionalStandard.BaseOfCode = virtAddr;
+                    case TEXT:
+                        optionalStandard.BaseOfCode = virtualPosition;
                         break;
-                    case ".rdata":
-                    case ".data":
+                    case RDATA:
+                    case DATA:
                         //PE32 headers want to know where the data starts
                         if(optionalStandard.Magic == IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32 && !dataSectionEncountered)
                         {
                             dataSectionEncountered = true;
-                            optionalHeader32.BaseOfData = virtAddr;
+                            optionalHeader32.BaseOfData = virtualPosition;
                         }
                         break;
                 }
 
-                s.VirtualAddress = virtAddr;
-
+                //update virtual address
+                if (s.VirtualAddress != virtualPosition)
+                {
+                    switch (s.Name)
+                    {
+                        case RSRC:
+                            ResourceTable res;
+                            using (var ms = new MemoryStream(s.Data))
+                            {
+                                //need to give it the original RVA 'cause that's important
+                                res = new ResourceTable(ms, s.VirtualAddress);
+                            }
+                            res.UpdateVirtualAddress(virtualPosition);
+                            //this is only safe because all I've done is changed the virtual address and reserialized the data
+                            //this means the data size can only go DOWN (because of alignment not being included)
+                            //do not repeat this anywhere else where the data gets changed
+                            s.Data = res.ToArray();
+                            goto default;
+                        default:
+                            s.VirtualAddress = virtualPosition;
+                            break;
+                    }
+                }
+                                
+                //update size
                 if (s.HasUninitializedData)
                 {
                     // Leave uninitialized data sizes untouched, their raw size is 0
                 }
                 else if (s.HasInitializedData && s.HasCode)
                 {
+                    //TODO really not sure why this is here...
                     // It is possible for the virtual size to be greater than the size of raw data
                     // Leave the virtual size untouched if this is the case
                     if (s.VirtualSize <= s.RawSize)
                         s.VirtualSize = (uint)s.Data.Length;
                 }
-                virtAddr += PEUtility.AlignUp(s.VirtualSize, virtualAlignment);
+
+                virtualPosition += PEUtility.AlignUp(s.VirtualSize, virtualAlignment);
             }
 
             /* Total virtual size is the final virtual address, which includes the initial virtual offset. */
             if (optionalStandard.Magic == IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32)
-                optionalHeader32.SizeOfImage = virtAddr;
+                optionalHeader32.SizeOfImage = virtualPosition;
             else
-                optionalHeader32plus.SizeOfImage = virtAddr;
+                optionalHeader32plus.SizeOfImage = virtualPosition;
         }
 
         #endregion
 
+        #region Serialization
+
         private void SerializeHeader(Stream file)
         {
-            using (var bw = new BinaryWriter(file, Encoding.ASCII, true))
+            using (var bw = new BinaryWriter(file, Encoding.Default, true))
             {
                 bw.WriteStruct(dosHeader);
                 bw.Write(dosStub);
@@ -369,6 +401,8 @@ namespace PETools
             }
         }
 
+        #endregion
+
         #region section addition/removal
 
         /// <summary>
@@ -379,7 +413,9 @@ namespace PETools
         /// <returns>Bytes written</returns>
         public void WriteSectionData(string name, byte[] data)
         {
-            GetSection(name).Data = data;
+            var sect = GetSection(name);
+            sect.Data = data;
+            sect.RawSize = sect.VirtualSize = (uint)data.Length;
         }
 
         public void AddSection(PESection section)

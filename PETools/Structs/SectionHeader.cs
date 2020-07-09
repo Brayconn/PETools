@@ -8,7 +8,7 @@ namespace PETools
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public struct IMAGE_SECTION_HEADER
     {
-        const int IMAGE_SIZEOF_SHORT_NAME = 8;
+        public const int IMAGE_SIZEOF_SHORT_NAME = 8;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = IMAGE_SIZEOF_SHORT_NAME)]
         [FieldOffset(0                           )] public char[] Name;
         [FieldOffset(IMAGE_SIZEOF_SHORT_NAME     )] public uint PhysicalAddress;

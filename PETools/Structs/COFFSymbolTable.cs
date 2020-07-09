@@ -8,7 +8,7 @@ namespace PETools
     public struct IMAGE_SYMBOL
     {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
-        [FieldOffset(0)] public byte[] Name;
+        [FieldOffset(0)] public char[] Name;
         [FieldOffset(0)] public uint Zeros;
         [FieldOffset(4)] public uint Offset;
         [FieldOffset(8)] public uint Value;
