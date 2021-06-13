@@ -73,7 +73,7 @@ namespace PETools
 #endif
 
     [DebuggerDisplay("Name Entries = {Header.NumberOfNameEntries} ID Entries = {Header.NumberOfIDEntries}")]
-    class ResourceTable
+    public class ResourceTable
     {
         public IMAGE_RESOURCE_DIRECTORY Header;
         public List<ResourceDirectoryEntry> NamedEntryPointers;
@@ -230,7 +230,7 @@ namespace PETools
     }
 
     [DebuggerDisplay("Type = {header.IsString ? \"String\" : \"ID\"} String Offset = {header.StringOffset} Data/Subdirectory Offset = {header.DataOffset} Text = {name.HasValue ? name.Value.UnicodeString : \"null\"}")]
-    class ResourceDirectoryEntry
+    public class ResourceDirectoryEntry
     {
         public IMAGE_RESOURCE_DIRECTORY_ENTRY header;
         public IMAGE_RESOURCE_DIR_STRING_U? name = null;

@@ -71,6 +71,32 @@ namespace PETools
 
         public bool Is32BitHeader => (fileHeader.Characteristics & IMAGE_FILE.IMAGE_FILE_32BIT_MACHINE) != 0;
 
+        public static bool TryGetBaseAddress(string path, out ulong baseAddress)
+        {
+            baseAddress = 0;
+            try
+            {
+                var file = FromFile(path);
+                switch (file.optionalStandard.Magic)
+                {
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32:
+                        baseAddress = file.optionalHeader32.ImageBase;
+                        break;
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_ROM:
+                        baseAddress = 0;
+                        return false;
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32PLUS:
+                        baseAddress = file.optionalHeader32plus.ImageBase;
+                        break;
+                }
+                return true;
+            }
+            catch (FileLoadException)
+            {
+                return false;
+            }
+        }
+
         #region construction
 
         public PEFile()
@@ -147,7 +173,39 @@ namespace PETools
             UpdateVirtualLayout();
             UpdateDataDirectories();
         }
-
+        public uint FileAlignment
+        {
+            get
+            {
+                switch (optionalStandard.Magic)
+                {
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32:
+                        return optionalHeader32.FileAlignment;
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_ROM:
+                        throw new NotSupportedException();
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32PLUS:
+                        return optionalHeader32plus.FileAlignment;
+                    default:
+                        throw new ArgumentException();
+                }
+            }
+            set
+            {
+                switch (optionalStandard.Magic)
+                {
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32:
+                        optionalHeader32.FileAlignment = value;
+                        break;
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_ROM:
+                        throw new NotSupportedException();
+                    case IMAGE_OPTIONAL_HEADER_STANDARD.MAGIC_PE32PLUS:
+                        optionalHeader32plus.FileAlignment = value;
+                        break;
+                    default:
+                        throw new ArgumentException();
+                }
+            }
+        }
         /// <summary>
         /// Updates the physical location of all sections, and updates the amount of initialized data
         /// </summary>
@@ -177,7 +235,11 @@ namespace PETools
             {
                 if (s.ContributesToFileSize)
                 {
-                    s.RawSize = PEUtility.AlignUp((uint)s.Data.Length, fileAlignment);
+                    //TODO use null coalecing operator somehow
+                    if (s.Data != null)
+                        s.RawSize = PEUtility.AlignUp((uint)s.Data.Length, fileAlignment);
+                    else
+                        s.RawSize = PEUtility.AlignUp(s.RawSize, fileAlignment);
                     s.PhysicalAddress = filePosition;
 
                     filePosition += s.RawSize;
@@ -379,7 +441,7 @@ namespace PETools
                     var temp = bw.BaseStream.Position;
                     //jump to where the data belongs
                     bw.BaseStream.Seek(section.PhysicalAddress, SeekOrigin.Begin);
-                    bw.Write(section.Data);
+                    bw.Write(section.Data ?? new byte[section.RawSize]);
                     //jump back
                     bw.BaseStream.Position = temp;
                 }

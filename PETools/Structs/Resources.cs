@@ -9,7 +9,7 @@ namespace PETools.Structs
 {
     [DebuggerDisplay("Name Entries = {NumberOfNameEntries} ID Entries = {NumberOfIDEntries}")]
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    struct IMAGE_RESOURCE_DIRECTORY
+    public struct IMAGE_RESOURCE_DIRECTORY
     {
         public uint Characteristics;
         public uint TimeDateStamp;
@@ -21,7 +21,7 @@ namespace PETools.Structs
 
     [DebuggerDisplay("Type = {IsString ? \"String\" : \"ID\"} String Offset = {StringOffset} Data/Subdirectory Offset = {DataOffset}")]
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
-    struct IMAGE_RESOURCE_DIRECTORY_ENTRY
+    public struct IMAGE_RESOURCE_DIRECTORY_ENTRY
     {
         const uint HighBit = 0x80000000;
 
@@ -44,7 +44,7 @@ namespace PETools.Structs
     //as a result, I've had to do it all manually...
     //[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 2)] //Pack = 2 because this one is WORD aligned
     [StructLayout(LayoutKind.Auto)] //using this to force errors if I ever try to use this with the normal functions
-    struct IMAGE_RESOURCE_DIR_STRING_U
+    public struct IMAGE_RESOURCE_DIR_STRING_U
     {
         public ushort Length;
         //[MarshalAs(UnmanagedType.ByValTStr, SizeParamIndex = 0)]
